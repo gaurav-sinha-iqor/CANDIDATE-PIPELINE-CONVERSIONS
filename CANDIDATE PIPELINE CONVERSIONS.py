@@ -63,16 +63,37 @@ sg_filtered = sg_filtered.dropna(subset=['CAMPAIGNINVITATIONID'])
 # Get total unique campaign invitation IDs for percentage calculation
 total_unique_ids = sg_filtered['CAMPAIGNINVITATIONID'].nunique()
 
-# Function to calculate metrics with exact match (case-insensitive)
+# Updated compute_metric function with 'Any' and 'Client Folder' logic
 def compute_metric(title, from_condition, to_condition):
     filtered = sg_filtered.copy()
+    
+    # Define known system folders
+    system_folders = [
+        'Inbox', 'Unresponsive', 'Completed', 'Unresponsive Talkscore', 'Passed MQ', 'Failed MQ',
+        'TalkScore Retake', 'Unresponsive Talkscore Retake', 'Failed TalkScore', 'Cold Leads',
+        'Cold Leads Talkscore', 'Cold Leads Talkscore Retake', 'On hold', 'Rejected',
+        'Talent Pool', 'Shortlisted', 'Hired'
+    ]
+    system_folders = [s.lower() for s in system_folders]
 
-    if from_condition == 'empty':
-        mask = filtered['FOLDER_FROM_TITLE'].isna()
+    # Handle 'from_condition'
+    if from_condition.strip().lower() == 'empty':
+        from_mask = filtered['FOLDER_FROM_TITLE'].isna()
+    elif from_condition.strip().lower() == 'any':
+        from_mask = filtered['FOLDER_FROM_TITLE'].notna()
+    elif from_condition.strip().lower() == 'client folder':
+        from_mask = ~filtered['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
     else:
-        mask = filtered['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower() == from_condition.strip().lower()
+        from_mask = filtered['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower() == from_condition.strip().lower()
 
-    mask &= filtered['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
+    # Handle 'to_condition'
+    if to_condition.strip().lower() == 'client folder':
+        to_mask = ~filtered['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
+    else:
+        to_mask = filtered['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
+
+    # Combined filter
+    mask = from_mask & to_mask
 
     count = filtered[mask]['CAMPAIGNINVITATIONID'].nunique()
     percentage = f"{(count / total_unique_ids * 100):.2f}" if total_unique_ids else "0.00"
@@ -81,18 +102,20 @@ def compute_metric(title, from_condition, to_condition):
 
 # Calculate all required metrics
 summary_data = [
-    compute_metric("Application to Unresponsive Folder", 'Inbox', 'Unresponsive'),
-    compute_metric("Unresponsive Folder to Passed MQ Folder", 'Unresponsive', 'Passed MQ'),
-    compute_metric("Unresponsive Folder to Failed MQ Folder", 'Unresponsive', 'Failed MQ'),
-    compute_metric("Unresponsive Folder to Cold Leads Folder", 'Unresponsive', 'Cold Leads'),
-    compute_metric("Application to Unresponsive TS Folder", 'Inbox', 'Unresponsive Talkscore'),
-    compute_metric("Unresponsive TS Folder to Passed MQ Folder", 'Unresponsive Talkscore', 'Passed MQ'),
-    compute_metric("Unresponsive TS Folder to Failed MQ Folder", 'Unresponsive Talkscore', 'Failed MQ'),
-    compute_metric("Unresponsive TS Folder to Cold Leads TS Folder", 'Unresponsive Talkscore', 'Cold Leads Talkscore'),
-    compute_metric("Application to Unresponsive TS Retake Folder", 'Inbox', 'Unresponsive Talkscore Retake'),
-    compute_metric("Unresponsive TS Retake Folder to Passed MQ Folder", 'Unresponsive Talkscore Retake', 'Passed MQ'),
-    compute_metric("Unresponsive TS Retake Folder to Failed MQ Folder", 'Unresponsive Talkscore Retake', 'Failed MQ'),
-    compute_metric("Unresponsive TS Retake Folder to Cold Lead TS Retake Folder", 'Unresponsive Talkscore Retake', 'Cold Leads Talkscore Retake')    
+    compute_metric("Application to Completed", 'Inbox', 'Completed'),
+    compute_metric("Application to Passed Prescreening", 'Completed', 'Passed MQ'),
+    compute_metric("Passed Prescreening to Talent Pool", 'Passed MQ', 'Talent Pool'),
+    compute_metric("Application to Talent Pool", 'Inbox', 'Talent Pool'),
+    
+    compute_metric("Application to Client Folder ", 'Any', 'Client Folder'),
+    
+    compute_metric("Application to Shortlisted", 'Any', 'Shortlisted'),
+    
+    compute_metric("Application to Hired", 'Any', 'Hired'),
+    
+    compute_metric("Talent Pool to Client Folder", 'Talent Pool', 'Client Folder'),
+    
+    compute_metric("Talent Pool to Shortlisted", 'Client Folder', 'Shortlisted')   
 ]
 
 # Create a DataFrame
