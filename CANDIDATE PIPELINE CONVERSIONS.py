@@ -63,7 +63,6 @@ sg_filtered = sg_filtered.dropna(subset=['CAMPAIGNINVITATIONID'])
 # Get total unique campaign invitation IDs for percentage calculation
 total_unique_ids = sg_filtered['CAMPAIGNINVITATIONID'].nunique()
 
-# Updated compute_metric function with 'Any' and 'Client Folder' logic
 def compute_metric(title, from_condition, to_condition):
     filtered = sg_filtered.copy()
     
@@ -94,11 +93,25 @@ def compute_metric(title, from_condition, to_condition):
 
     # Combined filter
     mask = from_mask & to_mask
+    matched_rows = filtered[mask]
 
-    count = filtered[mask]['CAMPAIGNINVITATIONID'].nunique()
+    # Unique invitation count
+    count = matched_rows['CAMPAIGNINVITATIONID'].nunique()
     percentage = f"{(count / total_unique_ids * 100):.2f}" if total_unique_ids else "0.00"
 
-    return {"Metric": title, "Count": count, "Percentage(%)": percentage}
+    # Calculate average time in days between INVITATIONDT and ACTIVITY_CREATED_AT
+    matched_rows = matched_rows.copy()
+    matched_rows['TIME_DIFF_DAYS'] = (matched_rows['ACTIVITY_CREATED_AT'] - matched_rows['INVITATIONDT']).dt.days
+    avg_time_days = matched_rows['TIME_DIFF_DAYS'].mean()
+    avg_time_display = f"{avg_time_days:.1f}" if not pd.isna(avg_time_days) else "N/A"
+
+    return {
+        "Metric": title,
+        "Count": count,
+        "Percentage(%)": percentage,
+        "Avg Time (In Days)": avg_time_display
+    }
+
 
 # Calculate all required metrics
 summary_data = [
