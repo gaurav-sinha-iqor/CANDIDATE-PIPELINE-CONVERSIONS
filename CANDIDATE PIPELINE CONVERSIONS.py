@@ -105,7 +105,7 @@ summary_data = [
     compute_metric("Application to Completed", 'Inbox', 'Completed'),
     compute_metric("Application to Passed Prescreening", 'Completed', 'Passed MQ'),
     compute_metric("Passed Prescreening to Talent Pool", 'Passed MQ', 'Talent Pool'),
-    compute_metric("Application to Talent Pool", 'Inbox', 'Talent Pool'),
+    compute_metric("Application to Talent Pool", 'Any', 'Talent Pool'),
     
     compute_metric("Application to Client Folder ", 'Any', 'Client Folder'),
     
