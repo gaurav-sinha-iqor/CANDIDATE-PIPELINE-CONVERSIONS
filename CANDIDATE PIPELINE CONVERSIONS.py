@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 
 # Set page title
-st.set_page_config(page_title="SOURCING & EARLY STAGE METRICS")
+st.set_page_config(page_title="CANDIDATE PIPELINE CONVERSIONS")
 
 # Load the data
 sg = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
@@ -16,7 +16,7 @@ sg['INSERTEDDATE'] = pd.to_datetime(sg['INSERTEDDATE'], errors='coerce')
 custom_colors = ["#2F76B9", "#3B9790", "#F5BA2E", "#6A4C93", "#F77F00", "#B4BBBE", "#e6657b", "#026df5", "#5aede2"]
 
 # Set the main title
-st.title("SOURCING & EARLY STAGE METRICS")
+st.title("CANDIDATE PIPELINE CONVERSIONS")
 
 # Filters
 st.subheader("Filters")
