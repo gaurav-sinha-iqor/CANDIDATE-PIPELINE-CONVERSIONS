@@ -149,8 +149,8 @@ def compute_metric(title, from_condition, to_condition):
 
 # Calculate all required metrics
 summary_data = [
-    compute_metric("Application to Completed", 'Inbox', 'Completed'),
-    compute_metric("Application to Passed Prescreening", 'Completed', 'Passed MQ'),
+    compute_metric("Application to Completed", 'Any', 'Completed'),
+    compute_metric("Application to Passed Prescreening", 'Any', 'Passed MQ'),
     compute_metric("Passed Prescreening to Talent Pool", 'Passed MQ', 'Talent Pool'),
     compute_metric("Application to Talent Pool", 'Any', 'Talent Pool'),
     
