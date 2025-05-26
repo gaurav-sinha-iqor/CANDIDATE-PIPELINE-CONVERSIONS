@@ -115,7 +115,9 @@ summary_data = [
     
     compute_metric("Talent Pool to Client Folder", 'Talent Pool', 'Client Folder'),
     
-    compute_metric("Talent Pool to Shortlisted", 'Client Folder', 'Shortlisted')   
+    compute_metric("Talent Pool to Shortlisted", 'Talent Pool', 'Shortlisted'),
+    
+    compute_metric("Client Folder to Shortlisted", 'Client Folder', 'Shortlisted')   
 ]
 
 # Create a DataFrame
