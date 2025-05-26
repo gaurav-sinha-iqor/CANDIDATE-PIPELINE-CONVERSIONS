@@ -65,7 +65,7 @@ total_unique_ids = sg_filtered['CAMPAIGNINVITATIONID'].nunique()
 
 def compute_metric(title, from_condition, to_condition):
     filtered = sg_filtered.copy()
-    
+
     # Define known system folders
     system_folders = [
         'Inbox', 'Unresponsive', 'Completed', 'Unresponsive Talkscore', 'Passed MQ', 'Failed MQ',
@@ -91,7 +91,7 @@ def compute_metric(title, from_condition, to_condition):
     else:
         to_mask = filtered['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
 
-    # Combined filter
+    # Combined filter for matched transitions
     mask = from_mask & to_mask
     matched_rows = filtered[mask]
 
@@ -99,11 +99,45 @@ def compute_metric(title, from_condition, to_condition):
     count = matched_rows['CAMPAIGNINVITATIONID'].nunique()
     percentage = f"{(count / total_unique_ids * 100):.2f}" if total_unique_ids else "0.00"
 
-    # Calculate average time in days between INVITATIONDT and ACTIVITY_CREATED_AT
-    matched_rows = matched_rows.copy()
-    matched_rows['TIME_DIFF_DAYS'] = (matched_rows['ACTIVITY_CREATED_AT'] - matched_rows['INVITATIONDT']).dt.days
-    avg_time_days = matched_rows['TIME_DIFF_DAYS'].mean()
-    avg_time_display = f"{avg_time_days:.1f}" if not pd.isna(avg_time_days) else "N/A"
+    # Prepare to calculate Avg Time
+    avg_durations = []
+
+    for cid in matched_rows['CAMPAIGNINVITATIONID'].unique():
+        cid_rows = filtered[filtered['CAMPAIGNINVITATIONID'] == cid]
+
+        # Get the TO row (target folder row)
+        if to_condition.strip().lower() == 'client folder':
+            to_row = cid_rows[
+                ~cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
+            ]
+        else:
+            to_row = cid_rows[
+                cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
+            ]
+        to_time = to_row['ACTIVITY_CREATED_AT'].max()
+
+        # Get the FROM row (source folder row)
+        if from_condition.strip().lower() == 'any':
+            from_row = cid_rows[
+                (cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(['inbox', '']))
+            ]
+        elif from_condition.strip().lower() == 'client folder':
+            from_row = cid_rows[
+                ~cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
+            ]
+        elif from_condition.strip().lower() == 'empty':
+            from_row = cid_rows[cid_rows['FOLDER_FROM_TITLE'].isna()]
+        else:
+            from_row = cid_rows[
+                cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower() == from_condition.strip().lower()
+            ]
+        from_time = from_row['ACTIVITY_CREATED_AT'].min()
+
+        if pd.notna(from_time) and pd.notna(to_time):
+            delta_days = (to_time - from_time).days
+            avg_durations.append(delta_days)
+
+    avg_time_display = f"{(sum(avg_durations)/len(avg_durations)):.1f}" if avg_durations else "N/A"
 
     return {
         "Metric": title,
