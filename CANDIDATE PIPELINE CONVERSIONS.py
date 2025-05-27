@@ -5,12 +5,12 @@ import pandas as pd
 st.set_page_config(page_title="CANDIDATE PIPELINE CONVERSIONS")
 
 # Load the data
-sg = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
+cp = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
 
 # Convert date columns to datetime
-sg['INVITATIONDT'] = pd.to_datetime(sg['INVITATIONDT'], errors='coerce')
-sg['ACTIVITY_CREATED_AT'] = pd.to_datetime(sg['ACTIVITY_CREATED_AT'], errors='coerce')
-sg['INSERTEDDATE'] = pd.to_datetime(sg['INSERTEDDATE'], errors='coerce')
+cp['INVITATIONDT'] = pd.to_datetime(cp['INVITATIONDT'], errors='coerce')
+cp['ACTIVITY_CREATED_AT'] = pd.to_datetime(cp['ACTIVITY_CREATED_AT'], errors='coerce')
+cp['INSERTEDDATE'] = pd.to_datetime(cp['INSERTEDDATE'], errors='coerce')
 
 # Custom colors for styling
 custom_colors = ["#2F76B9", "#3B9790", "#F5BA2E", "#6A4C93", "#F77F00", "#B4BBBE", "#e6657b", "#026df5", "#5aede2"]
@@ -22,49 +22,49 @@ st.title("CANDIDATE PIPELINE CONVERSIONS")
 st.subheader("Filters")
 
 # Ensure valid dates before showing date filter
-if sg['INVITATIONDT'].dropna().empty:
+if cp['INVITATIONDT'].dropna().empty:
     st.error("No valid INVITATIONDT values available in the data.")
     st.stop()
 
-min_date = sg['INVITATIONDT'].min()
-max_date = sg['INVITATIONDT'].max()
+min_date = cp['INVITATIONDT'].min()
+max_date = cp['INVITATIONDT'].max()
 
 start_date, end_date = st.date_input("Select Date Range", [min_date, max_date])
 
 with st.expander("Select Work Location(s)"):
     selected_worklocations = st.multiselect(
         "Work Location",
-        options=sorted(sg['WORKLOCATION'].dropna().unique()),
+        options=sorted(cp['WORKLOCATION'].dropna().unique()),
         default=None
     )
 
 with st.expander("Select Campaign Title(s)"):
     selected_campaigns = st.multiselect(
         "Campaign Title",
-        options=sorted(sg['CAMPAIGNTITLE'].dropna().unique()),
+        options=sorted(cp['CAMPAIGNTITLE'].dropna().unique()),
         default=None
     )
 
 # Filter data based on selections
-sg_filtered = sg[
-    (sg['INVITATIONDT'] >= pd.to_datetime(start_date)) &
-    (sg['INVITATIONDT'] <= pd.to_datetime(end_date))
+cp_filtered = cp[
+    (cp['INVITATIONDT'] >= pd.to_datetime(start_date)) &
+    (cp['INVITATIONDT'] <= pd.to_datetime(end_date))
 ]
 
 if selected_worklocations:
-    sg_filtered = sg_filtered[sg_filtered['WORKLOCATION'].isin(selected_worklocations)]
+    cp_filtered = cp_filtered[cp_filtered['WORKLOCATION'].isin(selected_worklocations)]
 
 if selected_campaigns:
-    sg_filtered = sg_filtered[sg_filtered['CAMPAIGNTITLE'].isin(selected_campaigns)]
+    cp_filtered = cp_filtered[cp_filtered['CAMPAIGNTITLE'].isin(selected_campaigns)]
 
 # Drop rows without campaign ID
-sg_filtered = sg_filtered.dropna(subset=['CAMPAIGNINVITATIONID'])
+cp_filtered = cp_filtered.dropna(subset=['CAMPAIGNINVITATIONID'])
 
 # Get total unique campaign invitation IDs for percentage calculation
-total_unique_ids = sg_filtered['CAMPAIGNINVITATIONID'].nunique()
+total_unique_ids = cp_filtered['CAMPAIGNINVITATIONID'].nunique()
 
-def compute_metric(title, from_condition, to_condition):
-    filtered = sg_filtered.copy()
+def compute_metric_1(title, from_condition, to_condition):
+    filtered = cp_filtered.copy()
 
     # Define known system folders
     system_folders = [
@@ -146,33 +146,26 @@ def compute_metric(title, from_condition, to_condition):
         "Avg Time (In Days)": avg_time_display
     }
 
-
 # Calculate all required metrics
 summary_data = [
-    compute_metric("Application to Completed", 'Any', 'Completed'),
-    compute_metric("Application to Passed Prescreening", 'Any', 'Passed MQ'),
-    compute_metric("Passed Prescreening to Talent Pool", 'Passed MQ', 'Talent Pool'),
-    compute_metric("Application to Talent Pool", 'Any', 'Talent Pool'),
-    
-    compute_metric("Application to Client Folder ", 'Any', 'Client Folder'),
-    
-    compute_metric("Application to Shortlisted", 'Any', 'Shortlisted'),
-    
-    compute_metric("Application to Hired", 'Any', 'Hired'),
-    
-    compute_metric("Talent Pool to Client Folder", 'Talent Pool', 'Client Folder'),
-    
-    compute_metric("Talent Pool to Shortlisted", 'Talent Pool', 'Shortlisted'),
-    
-    compute_metric("Client Folder to Shortlisted", 'Client Folder', 'Shortlisted')   
+    compute_metric_1("Application to Completed", 'Any', 'Completed'),
+    compute_metric_1("Application to Passed Prescreening", 'Any', 'Passed MQ'),
+    compute_metric_1("Passed Prescreening to Talent Pool", 'Passed MQ', 'Talent Pool'),
+    compute_metric_1("Application to Talent Pool", 'Any', 'Talent Pool'),
+    compute_metric_1("Application to Client Folder ", 'Any', 'Client Folder'),
+    compute_metric_1("Application to Shortlisted", 'Any', 'Shortlisted'),
+    compute_metric_1("Application to Hired", 'Any', 'Hired'),
+    compute_metric_1("Talent Pool to Client Folder", 'Talent Pool', 'Client Folder'),
+    compute_metric_1("Talent Pool to Shortlisted", 'Talent Pool', 'Shortlisted'),
+    compute_metric_1("Client Folder to Shortlisted", 'Client Folder', 'Shortlisted')   
 ]
 
 # Create a DataFrame
-summary_df = pd.DataFrame(summary_data)
+summary_df_1 = pd.DataFrame(summary_data)
 
 # Display summary table
 st.markdown("### Folder Movement Summary")
 st.dataframe(
-    summary_df.style        
+    summary_df_1.style        
         .applymap(lambda _: 'color: black', subset=pd.IndexSlice[:, ['Count', 'Percentage(%)']])
 )
