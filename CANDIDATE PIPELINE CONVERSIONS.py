@@ -1,135 +1,171 @@
-import streamlit as st
+import streamlit as st 
 import pandas as pd
-import numpy as np
 
+# Set page title
 st.set_page_config(page_title="CANDIDATE PIPELINE CONVERSIONS")
 
-@st.cache_data
-def load_and_preprocess():
-    df = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
-    df['INVITATIONDT'] = pd.to_datetime(df['INVITATIONDT'], errors='coerce')
-    df['ACTIVITY_CREATED_AT'] = pd.to_datetime(df['ACTIVITY_CREATED_AT'], errors='coerce')
-    df['INSERTEDDATE'] = pd.to_datetime(df['INSERTEDDATE'], errors='coerce')
-    
-    # Pre-clean strings once
-    for col in ['FOLDER_FROM_TITLE', 'FOLDER_TO_TITLE']:
-        df[col] = df[col].fillna('').astype(str).str.strip().str.lower()
-    
-    return df
+# Load the data
+cp = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
 
-df = load_and_preprocess()
+# Convert date columns to datetime
+cp['INVITATIONDT'] = pd.to_datetime(cp['INVITATIONDT'], errors='coerce')
+cp['ACTIVITY_CREATED_AT'] = pd.to_datetime(cp['ACTIVITY_CREATED_AT'], errors='coerce')
+cp['INSERTEDDATE'] = pd.to_datetime(cp['INSERTEDDATE'], errors='coerce')
 
-# UI
+# Custom colors for styling
+custom_colors = ["#2F76B9", "#3B9790", "#F5BA2E", "#6A4C93", "#F77F00", "#B4BBBE", "#e6657b", "#026df5", "#5aede2"]
+
+# Set the main title
 st.title("CANDIDATE PIPELINE CONVERSIONS")
+
+# Filters
 st.subheader("Filters")
 
-if df['INVITATIONDT'].dropna().empty:
-    st.error("No valid INVITATIONDT values available.")
+# Ensure valid dates before showing date filter
+if cp['INVITATIONDT'].dropna().empty:
+    st.error("No valid INVITATIONDT values available in the data.")
     st.stop()
 
-min_date, max_date = df['INVITATIONDT'].min(), df['INVITATIONDT'].max()
+min_date = cp['INVITATIONDT'].min()
+max_date = cp['INVITATIONDT'].max()
+
 start_date, end_date = st.date_input("Select Date Range", [min_date, max_date])
 
 with st.expander("Select Work Location(s)"):
-    work_locs = st.multiselect("Work Location", sorted(df['WORKLOCATION'].dropna().unique()))
+    selected_worklocations = st.multiselect(
+        "Work Location",
+        options=sorted(cp['WORKLOCATION'].dropna().unique()),
+        default=None
+    )
 
 with st.expander("Select Campaign Title(s)"):
-    campaigns = st.multiselect("Campaign Title", sorted(df['CAMPAIGNTITLE'].dropna().unique()))
+    selected_campaigns = st.multiselect(
+        "Campaign Title",
+        options=sorted(cp['CAMPAIGNTITLE'].dropna().unique()),
+        default=None
+    )
 
-# Filter once based on user selection
-mask = (df['INVITATIONDT'] >= pd.to_datetime(start_date)) & (df['INVITATIONDT'] <= pd.to_datetime(end_date))
-if work_locs:
-    mask &= df['WORKLOCATION'].isin(work_locs)
-if campaigns:
-    mask &= df['CAMPAIGNTITLE'].isin(campaigns)
+# Filter data based on selections
+cp_filtered = cp[
+    (cp['INVITATIONDT'] >= pd.to_datetime(start_date)) &
+    (cp['INVITATIONDT'] <= pd.to_datetime(end_date))
+]
 
-df = df[mask].copy()
-df = df.dropna(subset=['CAMPAIGNINVITATIONID'])
+if selected_worklocations:
+    cp_filtered = cp_filtered[cp_filtered['WORKLOCATION'].isin(selected_worklocations)]
 
-if df.empty:
-    st.warning("No data available after filters.")
-    st.stop()
+if selected_campaigns:
+    cp_filtered = cp_filtered[cp_filtered['CAMPAIGNTITLE'].isin(selected_campaigns)]
 
-# For reuse
-invitation_ids = df['CAMPAIGNINVITATIONID'].unique()
-total_ids = len(invitation_ids)
+# Drop rows without campaign ID
+cp_filtered = cp_filtered.dropna(subset=['CAMPAIGNINVITATIONID'])
 
-# System folders set
-system_folders = {
-    'inbox', 'unresponsive', 'completed', 'unresponsive talkscore', 'passed mq', 'failed mq',
-    'talkscore retake', 'unresponsive talkscore retake', 'failed talkscore', 'cold leads',
-    'cold leads talkscore', 'cold leads talkscore retake', 'on hold', 'rejected',
-    'talent pool', 'shortlisted', 'hired'
-}
+# Get total unique campaign invitation IDs for percentage calculation
+total_unique_ids = cp_filtered['CAMPAIGNINVITATIONID'].nunique()
 
-# Group by ID once for speed
-grouped = df.groupby('CAMPAIGNINVITATIONID')
+def compute_metric_1(title, from_condition, to_condition):
+    filtered = cp_filtered.copy()
 
-def get_transition_stats(title, from_cond, to_cond):
-    from_cond, to_cond = from_cond.lower(), to_cond.lower()
-    count = 0
-    durations = []
+    # Define known system folders
+    system_folders = [
+        'Inbox', 'Unresponsive', 'Completed', 'Unresponsive Talkscore', 'Passed MQ', 'Failed MQ',
+        'TalkScore Retake', 'Unresponsive Talkscore Retake', 'Failed TalkScore', 'Cold Leads',
+        'Cold Leads Talkscore', 'Cold Leads Talkscore Retake', 'On hold', 'Rejected',
+        'Talent Pool', 'Shortlisted', 'Hired'
+    ]
+    system_folders = [s.lower() for s in system_folders]
 
-    for cid, group in grouped:
-        from_match = to_match = False
-        from_time = to_time = None
+    # Handle 'from_condition'
+    if from_condition.strip().lower() == 'empty':
+        from_mask = filtered['FOLDER_FROM_TITLE'].isna()
+    elif from_condition.strip().lower() == 'any':
+        from_mask = filtered['FOLDER_FROM_TITLE'].notna()
+    elif from_condition.strip().lower() == 'client folder':
+        from_mask = ~filtered['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
+    else:
+        from_mask = filtered['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower() == from_condition.strip().lower()
 
-        # TO logic
-        if to_cond == "client folder":
-            to_rows = group[~group['FOLDER_TO_TITLE'].isin(system_folders)]
+    # Handle 'to_condition'
+    if to_condition.strip().lower() == 'client folder':
+        to_mask = ~filtered['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
+    else:
+        to_mask = filtered['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
+
+    # Combined filter for matched transitions
+    mask = from_mask & to_mask
+    matched_rows = filtered[mask]
+
+    # Unique invitation count
+    count = matched_rows['CAMPAIGNINVITATIONID'].nunique()
+    percentage = f"{(count / total_unique_ids * 100):.2f}" if total_unique_ids else "0.00"
+
+    # Prepare to calculate Avg Time
+    avg_durations = []
+
+    for cid in matched_rows['CAMPAIGNINVITATIONID'].unique():
+        cid_rows = filtered[filtered['CAMPAIGNINVITATIONID'] == cid]
+
+        # Get the TO row (target folder row)
+        if to_condition.strip().lower() == 'client folder':
+            to_row = cid_rows[
+                ~cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
+            ]
         else:
-            to_rows = group[group['FOLDER_TO_TITLE'] == to_cond]
-        if not to_rows.empty:
-            to_time = to_rows['ACTIVITY_CREATED_AT'].max()
-            to_match = True
+            to_row = cid_rows[
+                cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
+            ]
+        to_time = to_row['ACTIVITY_CREATED_AT'].max()
 
-        # FROM logic
-        if from_cond == "any":
-            from_rows = group[group['FOLDER_FROM_TITLE'].isin(["inbox", ""])]
-        elif from_cond == "client folder":
-            from_rows = group[~group['FOLDER_FROM_TITLE'].isin(system_folders)]
-        elif from_cond == "empty":
-            from_rows = group[group['FOLDER_FROM_TITLE'] == ""]
+        # Get the FROM row (source folder row)
+        if from_condition.strip().lower() == 'any':
+            from_row = cid_rows[
+                (cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(['inbox', '']))
+            ]
+        elif from_condition.strip().lower() == 'client folder':
+            from_row = cid_rows[
+                ~cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
+            ]
+        elif from_condition.strip().lower() == 'empty':
+            from_row = cid_rows[cid_rows['FOLDER_FROM_TITLE'].isna()]
         else:
-            from_rows = group[group['FOLDER_FROM_TITLE'] == from_cond]
+            from_row = cid_rows[
+                cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower() == from_condition.strip().lower()
+            ]
+        from_time = from_row['ACTIVITY_CREATED_AT'].min()
 
-        if not from_rows.empty:
-            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
-            from_match = True
+        if pd.notna(from_time) and pd.notna(to_time):
+            delta_days = (to_time - from_time).days
+            avg_durations.append(delta_days)
 
-        if from_match and to_match:
-            count += 1
-            if pd.notna(from_time) and pd.notna(to_time):
-                durations.append((to_time - from_time).days)
-
-    percent = f"{(count / total_ids * 100):.2f}" if total_ids else "0.00"
-    avg_days = f"{(np.mean(durations)):.1f}" if durations else "N/A"
+    avg_time_display = f"{(sum(avg_durations)/len(avg_durations)):.1f}" if avg_durations else "N/A"
 
     return {
         "Metric": title,
         "Count": count,
-        "Percentage(%)": percent,
-        "Avg Time (In Days)": avg_days
+        "Percentage(%)": percentage,
+        "Avg Time (In Days)": avg_time_display
     }
 
-# Define transitions
-metrics = [
-    ("Application to Completed", "Any", "Completed"),
-    ("Application to Passed Prescreening", "Any", "Passed MQ"),
-    ("Passed Prescreening to Talent Pool", "Passed MQ", "Talent Pool"),
-    ("Application to Talent Pool", "Any", "Talent Pool"),
-    ("Application to Client Folder", "Any", "Client Folder"),
-    ("Application to Shortlisted", "Any", "Shortlisted"),
-    ("Application to Hired", "Any", "Hired"),
-    ("Talent Pool to Client Folder", "Talent Pool", "Client Folder"),
-    ("Talent Pool to Shortlisted", "Talent Pool", "Shortlisted"),
-    ("Client Folder to Shortlisted", "Client Folder", "Shortlisted")
+# Calculate all required metrics
+summary_data = [
+    compute_metric_1("Application to Completed", 'Any', 'Completed'),
+    compute_metric_1("Application to Passed Prescreening", 'Any', 'Passed MQ'),
+    compute_metric_1("Passed Prescreening to Talent Pool", 'Passed MQ', 'Talent Pool'),
+    compute_metric_1("Application to Talent Pool", 'Any', 'Talent Pool'),
+    compute_metric_1("Application to Client Folder ", 'Any', 'Client Folder'),
+    compute_metric_1("Application to Shortlisted", 'Any', 'Shortlisted'),
+    compute_metric_1("Application to Hired", 'Any', 'Hired'),
+    compute_metric_1("Talent Pool to Client Folder", 'Talent Pool', 'Client Folder'),
+    compute_metric_1("Talent Pool to Shortlisted", 'Talent Pool', 'Shortlisted'),
+    compute_metric_1("Client Folder to Shortlisted", 'Client Folder', 'Shortlisted')   
 ]
 
-# Compute all
-summary_data = [get_transition_stats(title, from_c, to_c) for title, from_c, to_c in metrics]
-summary_df = pd.DataFrame(summary_data)
+# Create a DataFrame
+summary_df_1 = pd.DataFrame(summary_data)
 
-# Display
+# Display summary table
 st.markdown("### Folder Movement Summary")
-st.dataframe(summary_df.style.applymap(lambda _: 'color: black', subset=['Count', 'Percentage(%)']))
+st.dataframe(
+    summary_df_1.style        
+        .applymap(lambda _: 'color: black', subset=pd.IndexSlice[:, ['Count', 'Percentage(%)']])
+)
