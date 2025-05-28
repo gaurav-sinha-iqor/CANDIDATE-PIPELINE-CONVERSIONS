@@ -102,37 +102,43 @@ def compute_metric_1(title, from_condition, to_condition):
     # Prepare to calculate Avg Time
     avg_durations = []
 
+    avg_durations = []
+
     for cid in matched_rows['CAMPAIGNINVITATIONID'].unique():
         cid_rows = filtered[filtered['CAMPAIGNINVITATIONID'] == cid]
 
-        # Get the TO row (target folder row)
+        # Get 'to_time'
         if to_condition.strip().lower() == 'client folder':
-            to_row = cid_rows[
+            to_rows = cid_rows[
                 ~cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
             ]
         else:
-            to_row = cid_rows[
+            to_rows = cid_rows[
                 cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
             ]
-        to_time = to_row['ACTIVITY_CREATED_AT'].max()
+        to_time = to_rows['ACTIVITY_CREATED_AT'].max()
 
-        # Get the FROM row (source folder row)
+        # Get 'from_time'
         if from_condition.strip().lower() == 'any':
-            from_row = cid_rows[
-                (cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(['inbox', '']))
+            from_rows = cid_rows[
+                cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(['inbox', ''])
             ]
+            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
         elif from_condition.strip().lower() == 'client folder':
-            from_row = cid_rows[
+            from_rows = cid_rows[
                 ~cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
             ]
+            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
         elif from_condition.strip().lower() == 'empty':
-            from_row = cid_rows[cid_rows['FOLDER_FROM_TITLE'].isna()]
+            from_rows = cid_rows[cid_rows['FOLDER_FROM_TITLE'].isna()]
+            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
         else:
-            from_row = cid_rows[
+            from_rows = cid_rows[
                 cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower() == from_condition.strip().lower()
             ]
-        from_time = from_row['ACTIVITY_CREATED_AT'].min()
+            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
 
+        # Calculate delta
         if pd.notna(from_time) and pd.notna(to_time):
             delta_days = (to_time - from_time).days
             avg_durations.append(delta_days)
