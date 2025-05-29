@@ -125,7 +125,7 @@ def compute_metric_1(title, from_condition, to_condition):
             to_rows = cid_rows[
                 cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
             ]
-        to_time = to_rows['ACTIVITY_CREATED_AT'].max()
+        to_time = to_rows.groupby("CAMPAIGNINVITATIONID")['ACTIVITY_CREATED_AT'].max()
 
         # Get 'from_time'
         if from_condition.strip().lower() == 'any':
@@ -145,7 +145,7 @@ def compute_metric_1(title, from_condition, to_condition):
             from_rows = cid_rows[
                 cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower() == from_condition.strip().lower()
             ]
-            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
+            from_time = from_rows.groupby("CAMPAIGNINVITATIONID")['ACTIVITY_CREATED_AT'].min()
 
         # Calculate delta
         if pd.notna(from_time) and pd.notna(to_time):
