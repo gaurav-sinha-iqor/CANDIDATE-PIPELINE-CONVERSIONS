@@ -24,14 +24,9 @@ def load_and_preprocess_data():
     cp = cp.dropna(subset=['CAMPAIGNINVITATIONID'])
     
     # Optimize data types to reduce memory usage
-    categorical_columns = ['WORKLOCATION', 'CAMPAIGNTITLE', 'FOLDER_FROM_TITLE', 'FOLDER_TO_TITLE']
-    for col in categorical_columns:
-        if col in cp.columns:
-            cp[col] = cp[col].astype('category')
-    
-    # Convert campaign ID to category if it's string-based
-    if cp['CAMPAIGNINVITATIONID'].dtype == 'object':
-        cp['CAMPAIGNINVITATIONID'] = cp['CAMPAIGNINVITATIONID'].astype('category')
+    # Note: Avoid converting to category initially to prevent assignment issues
+    # We'll optimize memory after all data processing is complete
+    pass
     
     return cp
 
@@ -55,7 +50,7 @@ def filter_data_efficiently(cp, start_date, end_date, selected_worklocations, se
     date_mask = (cp['INVITATIONDT'] >= start_date_ts) & (cp['INVITATIONDT'] <= end_date_ts)
     
     # Apply filters progressively to reduce data size
-    cp_filtered = cp[date_mask]
+    cp_filtered = cp[date_mask].copy()  # Use copy to avoid SettingWithCopyWarning
     
     if selected_worklocations:
         location_mask = cp_filtered['WORKLOCATION'].isin(selected_worklocations)
@@ -64,6 +59,15 @@ def filter_data_efficiently(cp, start_date, end_date, selected_worklocations, se
     if selected_campaigns:
         campaign_mask = cp_filtered['CAMPAIGNTITLE'].isin(selected_campaigns)
         cp_filtered = cp_filtered[campaign_mask]
+    
+    # Optimize memory usage after filtering is complete
+    categorical_columns = ['WORKLOCATION', 'CAMPAIGNTITLE', 'FOLDER_FROM_TITLE', 'FOLDER_TO_TITLE']
+    for col in categorical_columns:
+        if col in cp_filtered.columns and not cp_filtered[col].empty:
+            try:
+                cp_filtered[col] = cp_filtered[col].astype('category')
+            except:
+                pass  # Skip if conversion fails
     
     return cp_filtered
 
@@ -82,9 +86,9 @@ def compute_metric_optimized(cp_filtered, title, from_condition, to_condition, t
     """Optimized metric computation using vectorized operations"""
     system_folders = get_system_folders_set()
     
-    # Prepare string columns once
-    folder_from_clean = cp_filtered['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
-    folder_to_clean = cp_filtered['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
+    # Prepare string columns once - handle potential categorical columns
+    folder_from_clean = cp_filtered['FOLDER_FROM_TITLE'].astype(str).fillna('').str.strip().str.lower()
+    folder_to_clean = cp_filtered['FOLDER_TO_TITLE'].astype(str).fillna('').str.strip().str.lower()
     
     # Handle 'from_condition' with vectorized operations
     if from_condition.strip().lower() == 'empty':
@@ -131,8 +135,8 @@ def calculate_avg_time_optimized(cp_filtered, matched_rows, from_condition, to_c
     
     # Prepare data for vectorized operations
     relevant_data = cp_filtered[cp_filtered['CAMPAIGNINVITATIONID'].isin(unique_cids)]
-    folder_from_clean = relevant_data['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
-    folder_to_clean = relevant_data['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
+    folder_from_clean = relevant_data['FOLDER_FROM_TITLE'].astype(str).fillna('').str.strip().str.lower()
+    folder_to_clean = relevant_data['FOLDER_TO_TITLE'].astype(str).fillna('').str.strip().str.lower()
     
     durations = []
     
