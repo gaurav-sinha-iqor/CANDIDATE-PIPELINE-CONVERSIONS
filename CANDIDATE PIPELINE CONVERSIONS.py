@@ -29,7 +29,12 @@ if cp['INVITATIONDT'].dropna().empty:
 min_date = cp['INVITATIONDT'].min()
 max_date = cp['INVITATIONDT'].max()
 
-start_date, end_date = st.date_input("Select Date Range", [min_date, max_date])
+date_range = st.date_input("Select Date Range", (min_date, max_date), min_value=min_date, max_value=max_date)
+    if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+        start_date, end_date = date_range
+    else:
+        st.error("Please select a valid date range (start and end dates).")
+        st.stop()
 
 with st.expander("Select Work Location(s)"):
     selected_worklocations = st.multiselect(
@@ -57,10 +62,14 @@ if selected_worklocations:
 if selected_campaigns:
     cp_filtered = cp_filtered[cp_filtered['CAMPAIGNTITLE'].isin(selected_campaigns)]
 
-# Drop rows without campaign ID
-cp_filtered = cp_filtered.dropna(subset=['CAMPAIGNINVITATIONID'])
-
-# Get total unique campaign invitation IDs for percentage calculation
+st.write("✅ Filtered Rows:", cp_filtered.shape[0])
+st.write("✅ Unique Campaign IDs:", cp_filtered['CAMPAIGNINVITATIONID'].nunique())
+    
+if cp_filtered.empty:
+    st.warning("No data after filtering. Please adjust filters.")
+    st.stop()
+    
+st.write("🚀 Starting metric computation...")
 total_unique_ids = cp_filtered['CAMPAIGNINVITATIONID'].nunique()
 
 def compute_metric_1(title, from_condition, to_condition):
