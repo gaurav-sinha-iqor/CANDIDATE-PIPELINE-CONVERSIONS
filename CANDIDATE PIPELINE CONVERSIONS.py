@@ -152,7 +152,7 @@ def compute_metric_1(title, from_condition, to_condition):
             delta_days = (to_time - from_time).days
             avg_durations.append(delta_days)
 
-    avg_time_display = f"{(sum(avg_durations)/len(avg_durations)):.1f}" if avg_durations else "N/A"
+    avg_time_display = f"{(avg_durations.mean()):.1f}" if avg_durations else "N/A"
 
     return {
         "Metric": title,
