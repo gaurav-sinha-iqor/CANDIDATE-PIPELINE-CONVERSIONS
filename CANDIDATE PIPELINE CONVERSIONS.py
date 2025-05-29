@@ -148,11 +148,10 @@ def compute_metric_1(title, from_condition, to_condition):
             from_time = from_rows.groupby("CAMPAIGNINVITATIONID")['ACTIVITY_CREATED_AT'].min()
 
         # Calculate delta
-        if pd.notna(from_time) and pd.notna(to_time):
-            delta_days = (to_time - from_time).days
-            avg_durations.append(delta_days)
+        delta_days = (to_time - from_time).days
+        avg_durations.append(delta_days)
 
-    avg_time_display = f"{(avg_durations.mean()):.1f}" if avg_durations else "N/A"
+    avg_time_display = f"{(avg_durations.mean()):.1f}" if not pd.isna(avg_durations) else "N/A"
 
     return {
         "Metric": title,
