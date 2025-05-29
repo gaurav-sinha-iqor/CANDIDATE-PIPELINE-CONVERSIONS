@@ -151,8 +151,10 @@ def compute_metric_1(title, from_condition, to_condition):
         delta_days = (to_time - from_time).dt.days
         avg_durations.append(delta_days)
 
-    avg_time_display = (
-    f"{avg_durations.mean():.1f}" if not avg_durations.isna().all() else "N/A")
+    if isinstance(avg_durations, pd.Series):
+        avg_time_display = f"{avg_durations.mean():.1f}" if not avg_durations.isna().all() else "N/A"
+    else:
+        avg_time_display = f"{avg_durations:.1f}" if not pd.isna(avg_durations) else "N/A"
 
     return {
         "Metric": title,
