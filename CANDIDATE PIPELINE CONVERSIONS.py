@@ -30,11 +30,11 @@ min_date = cp['INVITATIONDT'].min()
 max_date = cp['INVITATIONDT'].max()
 
 date_range = st.date_input("Select Date Range", (min_date, max_date), min_value=min_date, max_value=max_date)
-    if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-        start_date, end_date = date_range
-    else:
-        st.error("Please select a valid date range (start and end dates).")
-        st.stop()
+if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
+    start_date, end_date = date_range
+else:
+    st.error("Please select a valid date range (start and end dates).")
+    st.stop()
 
 with st.expander("Select Work Location(s)"):
     selected_worklocations = st.multiselect(
