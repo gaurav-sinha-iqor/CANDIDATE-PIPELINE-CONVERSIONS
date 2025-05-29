@@ -148,7 +148,7 @@ def compute_metric_1(title, from_condition, to_condition):
             from_time = from_rows.groupby("CAMPAIGNINVITATIONID")['ACTIVITY_CREATED_AT'].min()
 
         # Calculate delta
-        delta_days = (to_time - from_time).days
+        delta_days = (to_time - from_time).dt.days
         avg_durations.append(delta_days)
 
     avg_time_display = f"{(avg_durations.mean()):.1f}" if not pd.isna(avg_durations) else "N/A"
