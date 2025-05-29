@@ -162,8 +162,7 @@ def compute_metric_1(title, from_condition, to_condition):
     }
 
 # Calculate all required metrics
-summary_data = [
-    compute_metric_1("Application to Completed", 'Any', 'Completed'),
+summary_data = [compute_metric_1("Application to Completed", 'Any', 'Completed'),
     compute_metric_1("Application to Passed Prescreening", 'Any', 'Passed MQ'),
     compute_metric_1("Passed Prescreening to Talent Pool", 'Passed MQ', 'Talent Pool'),
     compute_metric_1("Application to Talent Pool", 'Any', 'Talent Pool'),
@@ -174,8 +173,7 @@ summary_data = [
     compute_metric_1("Talent Pool to Shortlisted", 'Talent Pool', 'Shortlisted'),
     compute_metric_1("Client Folder to Shortlisted", 'Client Folder', 'Shortlisted'),
     compute_metric_1("Shortlisted to Hired", 'Shortlisted', 'Hired'),
-    compute_metric_1("Shortlisted to Rejected", 'Shortlisted', 'Rejected')
-]
+    compute_metric_1("Shortlisted to Rejected", 'Shortlisted', 'Rejected')]
 
 # Create a DataFrame
 summary_df_1 = pd.DataFrame(summary_data)
