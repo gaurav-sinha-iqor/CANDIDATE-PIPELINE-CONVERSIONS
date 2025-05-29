@@ -109,57 +109,55 @@ def compute_metric_1(title, from_condition, to_condition):
     percentage = f"{(count / total_unique_ids * 100):.2f}" if total_unique_ids else "0.00"
 
     # Prepare to calculate Avg Time
-    avg_durations = []
-
-    avg_durations = []
-
-    for cid in matched_rows['CAMPAIGNINVITATIONID'].unique():
-        cid_rows = filtered[filtered['CAMPAIGNINVITATIONID'] == cid]
-
-        # Get 'to_time'
+    def compute_avg_time(filtered, from_condition, to_condition, matched_rows, system_folders):
+        df = filtered.copy()
+    
+        # Normalize folder names once
+        df['FOLDER_FROM_NORM'] = df['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
+        df['FOLDER_TO_NORM'] = df['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
+    
+        # Define mask for `to_condition`
         if to_condition.strip().lower() == 'client folder':
-            to_rows = cid_rows[
-                ~cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
-            ]
+            to_mask = ~df['FOLDER_TO_NORM'].isin(system_folders)
         else:
-            to_rows = cid_rows[
-                cid_rows['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower() == to_condition.strip().lower()
-            ]
-        to_time = to_rows.groupby("CAMPAIGNINVITATIONID")['ACTIVITY_CREATED_AT'].max()
-
-        # Get 'from_time'
-        if from_condition.strip().lower() == 'any':
-            from_rows = cid_rows[
-                cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(['inbox', ''])
-            ]
-            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
-        elif from_condition.strip().lower() == 'client folder':
-            from_rows = cid_rows[
-                ~cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower().isin(system_folders)
-            ]
-            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
-        elif from_condition.strip().lower() == 'empty':
-            from_rows = cid_rows[cid_rows['FOLDER_FROM_TITLE'].isna()]
-            from_time = from_rows['ACTIVITY_CREATED_AT'].min()
+            to_mask = df['FOLDER_TO_NORM'] == to_condition.strip().lower()
+    
+        # Define mask for `from_condition`
+        from_cond = from_condition.strip().lower()
+        if from_cond == 'any':
+            from_mask = df['FOLDER_FROM_NORM'].isin(['inbox', ''])
+        elif from_cond == 'client folder':
+            from_mask = ~df['FOLDER_FROM_NORM'].isin(system_folders)
+        elif from_cond == 'empty':
+            from_mask = df['FOLDER_FROM_TITLE'].isna()
         else:
-            from_rows = cid_rows[
-                cid_rows['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower() == from_condition.strip().lower()
-            ]
-            from_time = from_rows.groupby("CAMPAIGNINVITATIONID")['ACTIVITY_CREATED_AT'].min()
+            from_mask = df['FOLDER_FROM_NORM'] == from_cond
+    
+        # Filter from/to times
+        from_times = (
+            df[from_mask]
+            .groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT']
+            .min()
+            .rename('from_time')
+        )
+        to_times = (
+            df[to_mask]
+            .groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT']
+            .max()
+            .rename('to_time')
+        )
+    
+        # Join both times
+        avg_df = pd.concat([from_times, to_times], axis=1).dropna()
+    
+        if not avg_df.empty:
+            avg_df['delta_days'] = (avg_df['to_time'] - avg_df['from_time']).dt.days
+            avg_time_display = f"{avg_df['delta_days'].mean():.1f}"
+        else:
+            avg_time_display = "N/A"
+    
+        return avg_time_display
 
-        # Calculate delta
-        if pd.notna(from_time) and pd.notna(to_time):
-            delta_days = (to_time - from_time).dt.days
-            avg_durations.append(delta_days)
-
-    avg_time_display = f"{(sum(avg_durations)/len(avg_durations)):.1f}" if avg_durations else "N/A"
-
-    return {
-        "Metric": title,
-        "Count": count,
-        "Percentage(%)": percentage,
-        "Avg Time (In Days)": avg_time_display
-    }
 
 # Calculate all required metrics
 summary_data = [compute_metric_1("Application to Completed", 'Any', 'Completed'),
