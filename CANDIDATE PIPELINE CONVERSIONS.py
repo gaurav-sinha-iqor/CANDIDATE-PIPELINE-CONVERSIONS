@@ -59,21 +59,24 @@ if pd.isna(min_date) or pd.isna(max_date):
     st.error("Could not determine a valid date range from INVITATIONDT.")
     st.stop()
 
+# Compute default start as max_date - 60 days
+default_start_date = (max_date - pd.Timedelta(days=60)).date()
+
 start_date_val, end_date_val = st.date_input(
     "Select Date Range (based on Invitation Date)",
-    value=[min_date.date(), max_date.date()], # Pass date objects
+    value=[default_start_date, max_date.date()],   # Default = [max_date - 60 days, max_date]
     min_value=min_date.date(),
     max_value=max_date.date()
 )
 start_datetime = pd.to_datetime(start_date_val)
-end_datetime = pd.to_datetime(end_date_val) + pd.Timedelta(days=1) # Ensure end_date is inclusive up to end of day
+end_datetime = pd.to_datetime(end_date_val) + pd.Timedelta(days=1)  # Ensure end_date is inclusive up to end of day
 
 with st.expander("Select Work Location(s)"):
     unique_worklocations = sorted(cp_original['WORKLOCATION'].dropna().unique())
     selected_worklocations = st.multiselect(
         "Work Location",
         options=unique_worklocations,
-        default=[] # Explicitly empty default
+        default=[]  # Explicitly empty default
     )
 
 with st.expander("Select Campaign Title(s)"):
@@ -81,9 +84,10 @@ with st.expander("Select Campaign Title(s)"):
     selected_campaigns = st.multiselect(
         "Campaign Title",
         options=unique_campaigns,
-        default=[] # Explicitly empty default
+        default=[]  # Explicitly empty default
     )
 st.divider()
+
 
 # --- Filter Data Based on Selections ---
 # Start with a copy of the original preprocessed data
