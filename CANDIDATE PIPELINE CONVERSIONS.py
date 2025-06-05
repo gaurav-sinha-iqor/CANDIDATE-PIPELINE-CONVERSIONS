@@ -4,7 +4,6 @@ import pandas as pd
 # Set page title
 st.set_page_config(page_title="CANDIDATE PIPELINE CONVERSIONS")
 
-# --- Pre-computation and Global Definitions ---
 # Define system folders globally (converted to lowercase for consistent comparison)
 SYSTEM_FOLDERS = [
     'Inbox', 'Unresponsive', 'Completed', 'Unresponsive Talkscore', 'Passed MQ', 'Failed MQ',
@@ -19,24 +18,25 @@ CUSTOM_COLORS = ["#2F76B9", "#3B9790", "#F5BA2E",
                  "#6A4C93", "#F77F00", "#B4BBBE", "#e6657b",
                  "#026df5", "#5aede2"]
 
-@st.cache_data # Cache data loading and initial processing
-def load_and_preprocess_data(file_path="SOURCING & EARLY STAGE METRICS.csv"):
-    """Loads and preprocesses the candidate pipeline data."""
-    cp = pd.read_csv(file_path)
+# Load data
+@st.cache_data
+# Load the data
+cp_original = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
 
-    # Convert date columns to datetime
-    cp['INVITATIONDT'] = pd.to_datetime(cp['INVITATIONDT'], errors='coerce')
-    cp['ACTIVITY_CREATED_AT'] = pd.to_datetime(cp['ACTIVITY_CREATED_AT'], errors='coerce')
-    cp['INSERTEDDATE'] = pd.to_datetime(cp['INSERTEDDATE'], errors='coerce')
 
-    # Pre-process folder title columns for efficient string operations
-    cp['FOLDER_FROM_TITLE_CLEAN'] = cp['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
-    cp['FOLDER_TO_TITLE_CLEAN'] = cp['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
+
+# Convert date columns to datetime
+cp_original['INVITATIONDT'] = pd.to_datetime(cp_original['INVITATIONDT'], errors='coerce')
+cp_original['ACTIVITY_CREATED_AT'] = pd.to_datetime(cp_original['ACTIVITY_CREATED_AT'], errors='coerce')
+cp_original['INSERTEDDATE'] = pd.to_datetime(cp_original['INSERTEDDATE'], errors='coerce')
+
+# Pre-process folder title columns for efficient string operations
+cp_original['FOLDER_FROM_TITLE_CLEAN'] = cp_original['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
+cp_original['FOLDER_TO_TITLE_CLEAN'] = cp_original['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
     
-    return cp
 
-# Load the data using the cached function
-cp_original = load_and_preprocess_data()
+
+
 
 # Set the main title
 st.title("CANDIDATE PIPELINE CONVERSIONS")
@@ -72,7 +72,7 @@ start_datetime = pd.to_datetime(start_date_val)
 end_datetime = pd.to_datetime(end_date_val) + pd.Timedelta(days=1)  # Ensure end_date is inclusive up to end of day
 
 with st.expander("Select Work Location(s)"):
-    unique_worklocations = sorted(cp_original['WORKLOCATION'].dropna().unique())
+    unique_worklocations = sorted(cp_original['CAMPAIGN_SITE'].dropna().unique())
     selected_worklocations = st.multiselect(
         "Work Location",
         options=unique_worklocations,
@@ -100,7 +100,7 @@ cp_filtered = cp_filtered[
 ]
 
 if selected_worklocations:
-    cp_filtered = cp_filtered[cp_filtered['WORKLOCATION'].isin(selected_worklocations)]
+    cp_filtered = cp_filtered[cp_filtered['CAMPAIGN_SITE'].isin(selected_worklocations)]
 
 if selected_campaigns:
     cp_filtered = cp_filtered[cp_filtered['CAMPAIGNTITLE'].isin(selected_campaigns)]
@@ -239,3 +239,6 @@ if total_unique_ids_for_percentage > 0:
     )
 else:
     st.info("No data to compute metrics after filtering and dropping rows with missing Campaign Invitation IDs.")
+
+
+        
