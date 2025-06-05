@@ -18,8 +18,6 @@ CUSTOM_COLORS = ["#2F76B9", "#3B9790", "#F5BA2E",
                  "#6A4C93", "#F77F00", "#B4BBBE", "#e6657b",
                  "#026df5", "#5aede2"]
 
-# Load data
-@st.cache_data
 # Load the data
 cp_original = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
 
