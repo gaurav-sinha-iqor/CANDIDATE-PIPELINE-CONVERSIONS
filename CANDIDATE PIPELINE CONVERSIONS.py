@@ -21,8 +21,6 @@ CUSTOM_COLORS = ["#2F76B9", "#3B9790", "#F5BA2E",
 # Load the data
 cp_original = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
 
-
-
 # Convert date columns to datetime
 cp_original['INVITATIONDT'] = pd.to_datetime(cp_original['INVITATIONDT'], errors='coerce')
 cp_original['ACTIVITY_CREATED_AT'] = pd.to_datetime(cp_original['ACTIVITY_CREATED_AT'], errors='coerce')
@@ -31,10 +29,6 @@ cp_original['INSERTEDDATE'] = pd.to_datetime(cp_original['INSERTEDDATE'], errors
 # Pre-process folder title columns for efficient string operations
 cp_original['FOLDER_FROM_TITLE_CLEAN'] = cp_original['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
 cp_original['FOLDER_TO_TITLE_CLEAN'] = cp_original['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
-    
-
-
-
 
 # Set the main title
 st.title("CANDIDATE PIPELINE CONVERSIONS")
@@ -62,7 +56,7 @@ default_start_date = (max_date - pd.Timedelta(days=60)).date()
 
 start_date_val, end_date_val = st.date_input(
     "Select Date Range (based on Invitation Date)",
-    value=[default_start_date, max_date.date()],   # Default = [max_date - 60 days, max_date]
+    value=[default_start_date, max_date.date()],    # Default = [max_date - 60 days, max_date]
     min_value=min_date.date(),
     max_value=max_date.date()
 )
@@ -85,7 +79,6 @@ with st.expander("Select Campaign Title(s)"):
         default=[]  # Explicitly empty default
     )
 st.divider()
-
 
 # --- Filter Data Based on Selections ---
 # Start with a copy of the original preprocessed data
@@ -136,10 +129,8 @@ def compute_metric(
     # --- 1. Identify Transitions (for Count) ---
     # Mask for 'from' condition of the event
     if from_cond_lower == 'empty':
-        # Original logic: an activity record where FOLDER_FROM_TITLE was literally NaN
         from_event_mask = df_input['FOLDER_FROM_TITLE'].isna()
     elif from_cond_lower == 'any':
-        # Original logic: any activity record where FOLDER_FROM_TITLE was not NaN
         from_event_mask = df_input['FOLDER_FROM_TITLE'].notna()
     elif from_cond_lower == 'client folder':
         from_event_mask = (~df_input['FOLDER_FROM_TITLE_CLEAN'].isin(SYSTEM_FOLDERS_LOWER)) & \
@@ -161,20 +152,23 @@ def compute_metric(
     count = transitions_df['CAMPAIGNINVITATIONID'].nunique()
     percentage = f"{(count / total_cids_for_pct * 100):.2f}" if total_cids_for_pct > 0 else "0.00"
 
-    # --- 2. Calculate Average Time for these transitions ---
+    # --- 2. Calculate Average Times and Unengaged Counts ---
     avg_durations = []
+    avg_time_threshold_durations = []
     cids_with_this_transition = transitions_df['CAMPAIGNINVITATIONID'].unique()
+    
+    avg_time_display = "N/A"
+    avg_time_threshold_display = "N/A"
+    unengaged_candidates_count = 0
 
-    if count == 0 or not cids_with_this_transition.any():
-        avg_time_display = "N/A"
-    else:
-        # Consider only activities for CIDs that made the specific transition
+    if count > 0 and cids_with_this_transition.any():
+        # Get all activities for CIDs that made the specific transition
         relevant_activities_df = df_input[df_input['CAMPAIGNINVITATIONID'].isin(cids_with_this_transition)].copy()
 
-        # Determine 'from_time' (earliest activity time meeting from_condition logic) for each relevant CID
-        if from_cond_lower == 'any': # Special 'any' logic from original code for *time calculation*
+        # Determine 'from_time' (earliest activity) and 'to_time' (latest activity) for each relevant CID
+        if from_cond_lower == 'any': 
             from_time_logic_mask = relevant_activities_df['FOLDER_FROM_TITLE_CLEAN'].isin(['inbox', ''])
-        elif from_cond_lower == 'empty': # Based on FOLDER_FROM_TITLE being NaN
+        elif from_cond_lower == 'empty': 
             from_time_logic_mask = relevant_activities_df['FOLDER_FROM_TITLE'].isna()
         elif from_cond_lower == 'client folder':
             from_time_logic_mask = (~relevant_activities_df['FOLDER_FROM_TITLE_CLEAN'].isin(SYSTEM_FOLDERS_LOWER)) & \
@@ -184,7 +178,6 @@ def compute_metric(
         
         from_times_per_cid = relevant_activities_df[from_time_logic_mask].groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT'].min()
 
-        # Determine 'to_time' (latest activity time meeting to_condition logic) for each relevant CID
         if to_cond_lower == 'client folder':
             to_time_logic_mask = (~relevant_activities_df['FOLDER_TO_TITLE_CLEAN'].isin(SYSTEM_FOLDERS_LOWER)) & \
                                  (relevant_activities_df['FOLDER_TO_TITLE_CLEAN'] != '')
@@ -193,22 +186,49 @@ def compute_metric(
             
         to_times_per_cid = relevant_activities_df[to_time_logic_mask].groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT'].max()
 
-        # Calculate durations for CIDs that had the transition
+        # --- Identify Unengaged Candidates (Threshold Logic) ---
+        unengaged_cids = set()
+        grouped_activities = relevant_activities_df.groupby('CAMPAIGNINVITATIONID')
+        
+        for cid, group in grouped_activities:
+            if len(group) > 1:
+                group_sorted = group.sort_values(by='ACTIVITY_CREATED_AT')
+                time_diffs = group_sorted['ACTIVITY_CREATED_AT'].diff()
+                # Check if any consecutive activity difference is more than 7 days
+                if (time_diffs > pd.Timedelta(days=7)).any():
+                    unengaged_cids.add(cid)
+        
+        unengaged_candidates_count = len(unengaged_cids)
+        
+        # --- Calculate Original Avg Time (for all candidates) ---
         for cid in cids_with_this_transition:
             from_time = from_times_per_cid.get(cid, pd.NaT)
             to_time = to_times_per_cid.get(cid, pd.NaT)
-
             if pd.notna(from_time) and pd.notna(to_time) and to_time >= from_time:
                 delta_days = (to_time - from_time).days
                 avg_durations.append(delta_days)
         
         avg_time_display = f"{(sum(avg_durations) / len(avg_durations)):.1f}" if avg_durations else "N/A"
 
+        # --- Calculate Threshold Avg Time (for engaged candidates only) ---
+        engaged_cids = [cid for cid in cids_with_this_transition if cid not in unengaged_cids]
+        
+        for cid in engaged_cids:
+            from_time = from_times_per_cid.get(cid, pd.NaT)
+            to_time = to_times_per_cid.get(cid, pd.NaT)
+            if pd.notna(from_time) and pd.notna(to_time) and to_time >= from_time:
+                delta_days = (to_time - from_time).days
+                avg_time_threshold_durations.append(delta_days)
+
+        avg_time_threshold_display = f"{(sum(avg_time_threshold_durations) / len(avg_time_threshold_durations)):.1f}" if avg_time_threshold_durations else "N/A"
+
     return {
         "Metric": metric_title,
         "Count": count,
         "Percentage(%)": percentage,
-        "Avg Time (In Days)": avg_time_display
+        "Avg Time (In Days)": avg_time_display,
+        "Avg Time(Threshold)": avg_time_threshold_display,
+        "Unengaged Candidates Count": unengaged_candidates_count
     }
 
 # --- Calculate All Required Metrics ---
@@ -233,10 +253,8 @@ if total_unique_ids_for_percentage > 0:
     # --- Display Summary Table ---
     st.markdown("### Folder Movement Summary")
     st.dataframe(
-        summary_df.style.applymap(lambda _: 'color: black', subset=pd.IndexSlice[:, ['Count', 'Percentage(%)']])
+        summary_df,
+        use_container_width=True
     )
 else:
     st.info("No data to compute metrics after filtering and dropping rows with missing Campaign Invitation IDs.")
-
-
-        
