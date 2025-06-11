@@ -4,26 +4,7 @@ import pandas as pd
 # Set page title
 st.set_page_config(page_title="CANDIDATE PIPELINE CONVERSIONS", layout="wide")
 
-# Use st.cache_data to load the data only once
-@st.cache_data
-def load_data(file_path):
-    """Loads and preprocesses the data from a CSV file."""
-    df = pd.read_csv(file_path)
-    # --- Initial Preprocessing ---
-    # Convert date columns to datetime once
-    date_cols = ['INVITATIONDT', 'ACTIVITY_CREATED_AT', 'INSERTEDDATE']
-    for col in date_cols:
-        df[col] = pd.to_datetime(df[col], errors='coerce')
-
-    # Clean folder title columns once
-    df['FOLDER_FROM_TITLE_CLEAN'] = df['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
-    df['FOLDER_TO_TITLE_CLEAN'] = df['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
-    
-    # Drop rows without an essential ID for any calculations
-    df.dropna(subset=['CAMPAIGNINVITATIONID'], inplace=True)
-    return df
-
-# Define system folders globally
+# Define system folders globally (converted to lowercase for consistent comparison)
 SYSTEM_FOLDERS = [
     'Inbox', 'Unresponsive', 'Completed', 'Unresponsive Talkscore', 'Passed MQ', 'Failed MQ',
     'TalkScore Retake', 'Unresponsive Talkscore Retake', 'Failed TalkScore', 'Cold Leads',
@@ -32,14 +13,25 @@ SYSTEM_FOLDERS = [
 ]
 SYSTEM_FOLDERS_LOWER = {s.lower() for s in SYSTEM_FOLDERS} # Use a set for faster lookups
 
+# Custom colors for styling (if needed later, currently only used for table styling)
+CUSTOM_COLORS = ["#2F76B9", "#3B9790", "#F5BA2E",
+                 "#6A4C93", "#F77F00", "#B4BBBE", "#e6657b",
+                 "#026df5", "#5aede2"]
+
+# Load the data
+cp_original = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
+
+# Convert date columns to datetime
+cp_original['INVITATIONDT'] = pd.to_datetime(cp_original['INVITATIONDT'], errors='coerce')
+cp_original['ACTIVITY_CREATED_AT'] = pd.to_datetime(cp_original['ACTIVITY_CREATED_AT'], errors='coerce')
+cp_original['INSERTEDDATE'] = pd.to_datetime(cp_original['INSERTEDDATE'], errors='coerce')
+
+# Pre-process folder title columns for efficient string operations
+cp_original['FOLDER_FROM_TITLE_CLEAN'] = cp_original['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
+cp_original['FOLDER_TO_TITLE_CLEAN'] = cp_original['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
+
 # --- Main App ---
 st.title("CANDIDATE PIPELINE CONVERSIONS")
-
-try:
-    cp_original = load_data("SOURCING & EARLY STAGE METRICS.csv")
-except FileNotFoundError:
-    st.error("Error: The data file 'SOURCING & EARLY STAGE METRICS.csv' was not found.")
-    st.stop()
 
 st.divider()
 
