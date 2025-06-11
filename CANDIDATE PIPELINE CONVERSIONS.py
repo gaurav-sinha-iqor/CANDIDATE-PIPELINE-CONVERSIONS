@@ -1,10 +1,30 @@
 import streamlit as st
 import pandas as pd
 
-# Set page title
+# Set page title - This MUST be the first Streamlit command
 st.set_page_config(page_title="CANDIDATE PIPELINE CONVERSIONS", layout="wide")
 
-# Define system folders globally (converted to lowercase for consistent comparison)
+# Use st.cache_data to load and preprocess data from a CSV file only once.
+@st.cache_data
+def load_data(file_path):
+    """Loads and preprocesses data from a CSV file."""
+    df = pd.read_csv(file_path)
+    
+    # --- Initial Preprocessing (cached for performance) ---
+    # Convert date columns to datetime once
+    date_cols = ['INVITATIONDT', 'ACTIVITY_CREATED_AT', 'INSERTEDDATE']
+    for col in date_cols:
+        df[col] = pd.to_datetime(df[col], errors='coerce')
+
+    # Clean folder title columns once
+    df['FOLDER_FROM_TITLE_CLEAN'] = df['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
+    df['FOLDER_TO_TITLE_CLEAN'] = df['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
+    
+    # Drop rows without an essential ID for any calculations
+    df.dropna(subset=['CAMPAIGNINVITATIONID'], inplace=True)
+    return df
+
+# Define system folders globally
 SYSTEM_FOLDERS = [
     'Inbox', 'Unresponsive', 'Completed', 'Unresponsive Talkscore', 'Passed MQ', 'Failed MQ',
     'TalkScore Retake', 'Unresponsive Talkscore Retake', 'Failed TalkScore', 'Cold Leads',
@@ -13,25 +33,20 @@ SYSTEM_FOLDERS = [
 ]
 SYSTEM_FOLDERS_LOWER = {s.lower() for s in SYSTEM_FOLDERS} # Use a set for faster lookups
 
-# Custom colors for styling (if needed later, currently only used for table styling)
-CUSTOM_COLORS = ["#2F76B9", "#3B9790", "#F5BA2E",
-                 "#6A4C93", "#F77F00", "#B4BBBE", "#e6657b",
-                 "#026df5", "#5aede2"]
-
-# Load the data
-cp_original = pd.read_csv("SOURCING & EARLY STAGE METRICS.csv")
-
-# Convert date columns to datetime
-cp_original['INVITATIONDT'] = pd.to_datetime(cp_original['INVITATIONDT'], errors='coerce')
-cp_original['ACTIVITY_CREATED_AT'] = pd.to_datetime(cp_original['ACTIVITY_CREATED_AT'], errors='coerce')
-cp_original['INSERTEDDATE'] = pd.to_datetime(cp_original['INSERTEDDATE'], errors='coerce')
-
-# Pre-process folder title columns for efficient string operations
-cp_original['FOLDER_FROM_TITLE_CLEAN'] = cp_original['FOLDER_FROM_TITLE'].fillna('').str.strip().str.lower()
-cp_original['FOLDER_TO_TITLE_CLEAN'] = cp_original['FOLDER_TO_TITLE'].fillna('').str.strip().str.lower()
-
 # --- Main App ---
 st.title("CANDIDATE PIPELINE CONVERSIONS")
+
+# Load data from the CSV file with error handling
+try:
+    cp_original = load_data("SOURCING & EARLY STAGE METRICS.csv")
+except FileNotFoundError:
+    st.error("Error: The data file 'SOURCING & EARLY STAGE METRICS.csv' was not found in the same directory as the app.")
+    st.stop()
+
+# Stop execution if data loading resulted in an empty dataframe
+if cp_original.empty:
+    st.warning("The data file is empty or could not be processed.")
+    st.stop()
 
 st.divider()
 
@@ -92,20 +107,14 @@ total_unique_ids_for_percentage = cp_filtered['CAMPAIGNINVITATIONID'].nunique()
 # Perform expensive calculations once on the filtered dataframe.
 
 # 1. Pre-calculate "Unengaged" Candidates
-# Sort once by candidate and time
 cp_sorted = cp_filtered.sort_values(['CAMPAIGNINVITATIONID', 'ACTIVITY_CREATED_AT'])
-# Calculate time diff between consecutive activities
 time_diffs = cp_sorted['ACTIVITY_CREATED_AT'].diff()
-# Check if the activity is for the same candidate as the previous row
 is_same_candidate = cp_sorted['CAMPAIGNINVITATIONID'] == cp_sorted['CAMPAIGNINVITATIONID'].shift(1)
-# A candidate is unengaged if they have a gap > 7 days between activities
 unengaged_mask = (time_diffs > pd.Timedelta(days=7)) & is_same_candidate
-# Get the unique set of unengaged candidate IDs
 unengaged_cids_set = set(cp_sorted.loc[unengaged_mask, 'CAMPAIGNINVITATIONID'].unique())
 
-# 2. Pre-calculate 'from_times' and 'to_times' for all transitions
-# Group by candidate to get overall earliest and latest times
-time_boundaries = cp_filtered.groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT'].agg(['min', 'max']).to_dict('index')
+# 2. Pre-calculate absolute start time for "Application to X" metrics
+absolute_start_times = cp_filtered.groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT'].min().to_dict()
 
 
 def compute_metric_optimized(
@@ -115,15 +124,15 @@ def compute_metric_optimized(
     to_condition: str,
     total_cids: int,
     unengaged_cids: set,
-    time_bounds: dict
+    app_start_times: dict
 ):
     """
-    Computes a single metric using pre-calculated data for speed.
+    Computes a single metric using pre-calculated data and dynamic time lookups.
     """
     from_cond_lower = from_condition.strip().lower()
     to_cond_lower = to_condition.strip().lower()
 
-    # --- 1. Identify Transitions (Count) - This part remains similar ---
+    # --- 1. Identify Transitions (Count) ---
     if from_cond_lower == 'any':
         from_mask = df['FOLDER_FROM_TITLE'].notna()
     elif from_cond_lower == 'client folder':
@@ -140,24 +149,42 @@ def compute_metric_optimized(
     cids_with_transition = set(df.loc[event_mask, 'CAMPAIGNINVITATIONID'].unique())
     
     count = len(cids_with_transition)
-    percentage = f"{(count / total_cids * 100):.2f}" if total_cids > 0 else "0.00"
+    if total_cids == 0:
+        percentage = "0.00"
+    else:
+        percentage = f"{(count / total_cids * 100):.2f}"
 
-    # --- 2. Use Pre-calculated data for time calculations ---
+    # --- 2. Use Pre-calculated and Dynamic data for time calculations ---
     unengaged_in_this_metric = cids_with_transition.intersection(unengaged_cids)
     engaged_in_this_metric = cids_with_transition.difference(unengaged_in_this_metric)
     
     unengaged_count = len(unengaged_in_this_metric)
     
-    # Get specific start and end times for this transition
-    # This is the only remaining group-by, but it's on a much smaller, pre-filtered set of rows.
+    # --- DYNAMIC TIME CALCULATION (NEW LOGIC) ---
+    from_times_per_cid = {}
+    # For "Application to X" metrics, use the pre-calculated absolute start time
+    if from_cond_lower == 'any':
+        from_times_per_cid = app_start_times
+    # For specific stage-to-stage metrics, find the time they entered the "from" stage
+    else:
+        if from_cond_lower == 'client folder':
+            from_time_mask = (~df['FOLDER_TO_TITLE_CLEAN'].isin(SYSTEM_FOLDERS_LOWER)) & (df['FOLDER_TO_TITLE_CLEAN'] != '')
+        else:
+            from_time_mask = df['FOLDER_TO_TITLE_CLEAN'] == from_cond_lower
+        
+        relevant_from_times = df[df['CAMPAIGNINVITATIONID'].isin(cids_with_transition) & from_time_mask]
+        # Find the latest time a candidate was moved INTO the "from" stage
+        from_times_per_cid = relevant_from_times.groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT'].max().to_dict()
+
+    # Get the latest time a candidate was moved INTO the "to" stage
     relevant_to_times = df[df['CAMPAIGNINVITATIONID'].isin(cids_with_transition) & to_mask]
-    to_times_per_cid = relevant_to_times.groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT'].max()
+    to_times_per_cid = relevant_to_times.groupby('CAMPAIGNINVITATIONID')['ACTIVITY_CREATED_AT'].max().to_dict()
 
     avg_durations = []
     avg_time_threshold_durations = []
     
     for cid in cids_with_transition:
-        from_time = time_bounds.get(cid, {}).get('min') # Get pre-calculated earliest time
+        from_time = from_times_per_cid.get(cid, pd.NaT)
         to_time = to_times_per_cid.get(cid, pd.NaT)
 
         if pd.notna(from_time) and pd.notna(to_time) and to_time >= from_time:
@@ -208,7 +235,7 @@ if total_unique_ids_for_percentage > 0:
                 to_condition=to_cond,
                 total_cids=total_unique_ids_for_percentage,
                 unengaged_cids=unengaged_cids_set,
-                time_bounds=time_boundaries
+                app_start_times=absolute_start_times
             )
             summary_data.append(result)
 
