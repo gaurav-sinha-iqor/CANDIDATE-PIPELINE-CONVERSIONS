@@ -9,7 +9,7 @@ SYSTEM_FOLDERS = [
     'Inbox', 'Unresponsive', 'Completed', 'Unresponsive Talkscore', 'Passed MQ', 'Failed MQ',
     'TalkScore Retake', 'Unresponsive Talkscore Retake', 'Failed TalkScore', 'Cold Leads',
     'Cold Leads Talkscore', 'Cold Leads Talkscore Retake', 'On hold', 'Rejected',
-    'Talent Pool', 'Shortlisted', 'Hired'
+    'Talent Pool', 'Shortlisted', 'Hired','Candidate Databank'
 ]
 SYSTEM_FOLDERS_LOWER = {s.lower() for s in SYSTEM_FOLDERS} # Use a set for faster lookups
 
